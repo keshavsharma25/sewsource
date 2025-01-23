@@ -7,3 +7,8 @@ quote-style = "single"
 indent-style = "space"
 
 docstring-code-format = true
+
+[project]
+name = "sewsource"
+version = "0.0.1"
+dependencies = ["rich", "click", "GitPython"]

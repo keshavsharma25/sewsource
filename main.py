@@ -1,15 +1,11 @@
 import click
 from git import Repo
 from git.exc import GitError, GitCommandError
-import re
 from pathlib import Path
+import re
 from typing import List
 import tempfile
-
-
-EXTENSIONS = ('.md', '.mdx')
-BLACKLIST_FILES = {'contributing.md'}
-IGNORE_DIRS = {'.git', '.github'}
+from rich.console import Console
 
 
 def is_valid_github_url(url: str) -> bool:
@@ -73,7 +69,13 @@ def clone_repository(url: str, temp_dir: str) -> Path:
         raise GitError(error_message)
 
 
-def analyze_sources(root_path: Path) -> dict[str, List[str]]:
+def analyze_sources(
+    root_path: Path,
+    include_dirs: tuple[str, ...] = (),
+    exclude_dirs: tuple[str, ...] = (),
+    blacklist: tuple[str, ...] = (),
+    extensions: tuple[str, ...] = (),
+) -> dict[Path, List[Path]]:
     """
     analyze directory structure using rglob because we're too fancy for os.walk
     returns a dictionary of folder paths and their source files
@@ -81,19 +83,24 @@ def analyze_sources(root_path: Path) -> dict[str, List[str]]:
     @param root_path: the path to your markdown wasteland
     @return: a dict of folders and their files, organized like your life isn't
     """
-    file_groups = {}
+    file_groups: dict[Path, List[Path]] = {}
 
     # rglob through all files like we're searching for meaning in life
     for file_path in root_path.rglob('*'):
         # skip directories we hate
-        if any(ignore_dir in file_path.parts for ignore_dir in IGNORE_DIRS):
+        if any(ignore_dir in file_path.parts for ignore_dir in exclude_dirs):
+            continue
+
+        if include_dirs and not any(
+            inc_dir in str(file_path) for inc_dir in include_dirs
+        ):
             continue
 
         # check if it's a file and matches our extension fetish
         if (
             file_path.is_file()
-            and file_path.suffix in EXTENSIONS
-            and file_path.name.lower() not in BLACKLIST_FILES
+            and file_path.suffix in extensions
+            and file_path.name.lower() not in blacklist
         ):
             # get the parent directory path
             dir_path = file_path.parent
@@ -109,34 +116,36 @@ def analyze_sources(root_path: Path) -> dict[str, List[str]]:
 
 
 def concatenate_sources(
-    filegroups: dict[str, List[str]], root_path: Path, output_dir: str
+    file_groups: dict[Path, List[Path]], root_path: Path, output_dir: Path
 ):
     """
-    concatenates files and export them to an output_dir
+    Concatenates files and export them to an output_dir
     """
     Path(Path(output_dir) / root_path.name).mkdir(parents=True, exist_ok=True)
-    total_files = sum(len(files) for files in filegroups.values())
+    total_folders = len(file_groups)
+    total_files = sum(len(files) for files in file_groups.values())
 
     click.secho(
-        f'\n🚀 Found {total_files} files to merge. may god have mercy on us.', fg='blue'
+        f'\n🚀 Found {total_files} files and {total_folders} folders to merge.',
+        fg='blue',
     )
 
     i = 1
 
     with click.progressbar(
-        filegroups.items(),
-        length=len(filegroups),
+        file_groups.items(),
+        length=len(file_groups),
         label=click.style('📁 Processing folders', fg='green'),
         fill_char=click.style('█', fg='green'),
         empty_char='░',
     ) as bar:
-        for dir_path, file_list in filegroups.items():
+        for dir_path, file_list in file_groups.items():
             folder_name = Path(dir_path).name
             output_content = []
 
             output_content.append(f"""
 {'#' * 50}
-# Folder: {Path(dir_path).relative_to(root_path)}
+# Folder: {dir_path.relative_to(root_path)}
 # Number of files merged: {len(file_list)}
 {'#' * 50}\n
 """)
@@ -149,7 +158,7 @@ def concatenate_sources(
 
                         output_content.append(f"""
 \n{'=' * 80}
-Source File {idx}: {Path(file_path).relative_to(root_path)}
+Source File {idx}: {file_path.relative_to(root_path)}
 {'=' * 80}\n
 {content}
 """)
@@ -161,7 +170,7 @@ Source File {idx}: {Path(file_path).relative_to(root_path)}
                     )
                     continue
 
-            output_file = Path(output_dir) / root_path.name / f'{i}_{folder_name}.md'
+            output_file = Path(output_dir) / root_path.name / f'{i}_{folder_name}.txt'
             output_file.write_text('\n'.join(output_content), encoding='utf-8')
 
             i += 1
@@ -169,34 +178,75 @@ Source File {idx}: {Path(file_path).relative_to(root_path)}
 
 
 @click.command()
-@click.option('--repo-url', required=True, help='GitHub repository URL to clone')
+@click.option('-r', '--repo-url', required=True, help='GitHub repository URL to clone')
 @click.option(
+    '-o',
     '--output-dir',
     default=Path.home() / '.sew_source',
     show_default=True,
     help='Output directory to save the sewed source',
 )
-def main(repo_url: str, output_dir: str):
+@click.option(
+    '-i',
+    '--include-dirs',
+    multiple=True,
+    help='Only include directories that should be included as sources',
+)
+@click.option(
+    '-x',
+    '--exclude-dirs',
+    multiple=True,
+    help='Exclude directories that should not be included as sources',
+)
+@click.option(
+    '-b',
+    '--blacklist',
+    multiple=True,
+    help='Blacklist filenames that should not be included as sources',
+)
+@click.option(
+    '-e',
+    '--extensions',
+    default=['.md', '.mdx'],
+    show_default=True,
+    help='Extensions that should be whitelisted as source',
+)
+def main(
+    repo_url: str,
+    output_dir: Path,
+    include_dirs: tuple[str, ...],
+    exclude_dirs: tuple[str, ...],
+    blacklist: tuple[str, ...],
+    extensions: tuple[str, ...],
+):
     """
     CLI tool to clone a GitHub repository into a temporary directory.
     """
+
+    console = Console()
+
     with tempfile.TemporaryDirectory() as temp_dir:
-        click.secho(f'📁 Created temporary directory: {temp_dir}')
+        click.secho(f'📁 Created temporary directory: {temp_dir}\n')
         repo_path: Path
 
         try:
-            repo_path = clone_repository(repo_url, temp_dir)
-            click.secho(
-                f'\n✅Successfully cloned repository to: {repo_path}', fg='green'
-            )
+            with console.status(f'Cloning Repo: {repo_url}', spinner='circle'):
+                repo_path = clone_repository(repo_url, temp_dir)
+            click.secho(f'✅Successfully cloned repository to: {repo_path}', fg='green')
         except (GitError, ValueError) as e:
-            click.echo(f'Error: {str(e)}')
+            click.echo(f'❌Error: {str(e)}')
             return 1
 
-        click.secho('\n⌛Analyzing...', fg='blue')
-        file_groups = analyze_sources(repo_path)
+        try:
+            click.secho('\n⌛Analyzing...', fg='blue')
 
-        concatenate_sources(file_groups, repo_path, output_dir)
+            file_groups = analyze_sources(
+                repo_path, include_dirs, exclude_dirs, blacklist, extensions
+            )
+
+            concatenate_sources(file_groups, repo_path, output_dir)
+        except Exception as e:
+            click.echo(f'❌Error: {str(e)}')
 
     click.secho('\n✨ Done! Your markdown soup is served!', fg='green', bold=True)
 
