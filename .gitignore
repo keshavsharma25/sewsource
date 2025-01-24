@@ -1,0 +1,22 @@
+# python specifics
+__pycache__/
+*.py[cod]
+*$py.class
+
+# distribution / packaging
+dist/
+build/
+*.egg-info/
+
+# virtual environments
+venv/
+.env/
+.venv/
+
+# ide garbage
+.vscode/
+.idea/
+*.swp
+
+# misc
+.DS_Store
