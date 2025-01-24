@@ -13,7 +13,11 @@ license = { file = "LICENSE" }
 dependencies = ["rich", "click", "GitPython"]
 
 [project.scripts]
-sew-source = 'sew_source.main:main'
+sewsource = 'sewsource.main:main'
+
+[project.urls]
+Homepage = "https://github.com/keshavsharma25/sewsource"
+Repository = "https://github.com/keshavsharma25/sewsource"
 
 [tool.ruff]
 line-length = 88
