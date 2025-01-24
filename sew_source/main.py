@@ -178,7 +178,7 @@ Source File {idx}: {file_path.relative_to(root_path)}
 
 
 @click.command()
-@click.option('-r', '--repo-url', required=True, help='GitHub repository URL to clone')
+@click.argument('repo-url', type=click.STRING)
 @click.option(
     '-o',
     '--output-dir',
