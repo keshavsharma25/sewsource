@@ -2,6 +2,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
+[![PyPI version](https://badge.fury.io/py/sewsource.svg)](https://badge.fury.io/py/sewsource)
 
 ## 📖 Overview
 
@@ -95,7 +96,7 @@ sewsource https://github.com/kubernetes/kubernetes \
 
 ## Next TODOs
 
-* [ ] Add support for comma separated values as arguments for multiple folders/files
+* [x] Add support for comma separated values as arguments for multiple folders/files
 
 ## 🤝 Contributing
 
