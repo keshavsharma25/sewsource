@@ -1,3 +1,4 @@
+from importlib.metadata import version
 import click
 from git import Repo
 from git.exc import GitError, GitCommandError
@@ -179,10 +180,11 @@ Source File {idx}: {file_path.relative_to(root_path)}
 
 @click.command()
 @click.argument('repo-url', type=click.STRING)
+@click.version_option(version=version('sewsource'), prog_name='sewsource')
 @click.option(
     '-o',
     '--output-dir',
-    default=Path.home() / '.sew_source',
+    default=Path.home() / '.sewsource',
     show_default=True,
     help='Output directory to save the sewed source',
 )
