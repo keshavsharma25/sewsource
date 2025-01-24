@@ -9,6 +9,15 @@ import tempfile
 from rich.console import Console
 
 
+def parse_csv_option(ctx, param, value):
+    """
+    Callback function to parse list from csv
+    """
+    if not value:
+        return ()
+    return tuple(item.strip() for item in value.split(',') if item.strip())
+
+
 def is_valid_github_url(url: str) -> bool:
     """
     Validate if the provided URL is a valid GitHub repository URL.
@@ -86,24 +95,22 @@ def analyze_sources(
     """
     file_groups: dict[Path, List[Path]] = {}
 
-    # rglob through all files like we're searching for meaning in life
     for file_path in root_path.rglob('*'):
         # skip directories we hate
         if any(ignore_dir in file_path.parts for ignore_dir in exclude_dirs):
             continue
 
+        # include directories we love
         if include_dirs and not any(
             inc_dir in str(file_path) for inc_dir in include_dirs
         ):
             continue
 
-        # check if it's a file and matches our extension fetish
         if (
             file_path.is_file()
             and file_path.suffix in extensions
             and file_path.name.lower() not in blacklist
         ):
-            # get the parent directory path
             dir_path = file_path.parent
 
             # initialize the list for this directory if it's new
@@ -191,27 +198,30 @@ Source File {idx}: {file_path.relative_to(root_path)}
 @click.option(
     '-i',
     '--include-dirs',
-    multiple=True,
-    help='Only include directories that should be included as sources',
+    callback=parse_csv_option,
+    help='Only include directories that should be included as sources (comma-separated)',
 )
 @click.option(
     '-x',
     '--exclude-dirs',
-    multiple=True,
-    help='Exclude directories that should not be included as sources',
+    default='.git,.github',
+    callback=parse_csv_option,
+    show_default=True,
+    help='Exclude directories that should not be included as sources (comma-separated)',
 )
 @click.option(
     '-b',
     '--blacklist',
-    multiple=True,
-    help='Blacklist filenames that should not be included as sources',
+    callback=parse_csv_option,
+    help='Blacklist filenames that should not be included as sources (comma-separated)',
 )
 @click.option(
     '-e',
     '--extensions',
-    default=['.md', '.mdx'],
+    default='.md,.mdx',
+    callback=parse_csv_option,
     show_default=True,
-    help='Extensions that should be whitelisted as source',
+    help='Extensions that should be whitelisted as source (comma-separated)',
 )
 def main(
     repo_url: str,
@@ -226,10 +236,10 @@ def main(
     """
 
     console = Console()
+    repo_path: Path
 
     with tempfile.TemporaryDirectory() as temp_dir:
         click.secho(f'📁 Created temporary directory: {temp_dir}\n')
-        repo_path: Path
 
         try:
             with console.status(f'Cloning Repo: {repo_url}', spinner='circle'):
@@ -250,7 +260,11 @@ def main(
         except Exception as e:
             click.echo(f'❌Error: {str(e)}')
 
-    click.secho('\n✨ Done! Your markdown soup is served!', fg='green', bold=True)
+    click.secho(
+        f'\n✨ Done! Your source soup is served at `{Path(output_dir) / repo_path.name}`!',
+        fg='green',
+        bold=True,
+    )
 
 
 if __name__ == '__main__':
