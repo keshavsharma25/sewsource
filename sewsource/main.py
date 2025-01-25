@@ -102,7 +102,8 @@ def analyze_sources(
 
         # include directories we love
         if include_dirs and not any(
-            inc_dir in str(file_path) for inc_dir in include_dirs
+            re.search(f'(^|/){re.escape(inc_dir)}(/|$)', str(file_path))
+            for inc_dir in include_dirs
         ):
             continue
 

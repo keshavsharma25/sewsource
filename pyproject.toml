@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "sewsource"
-version = "0.1.1"
+version = "0.1.2"
 description = "A CLI tool to sew github documentations into a compiled source for LLMs"
 requires-python = ">=3.8"
 authors = [{ name = "Keshav Sharma", email = "skeshav0825@gmail.com" }]
