@@ -42,6 +42,7 @@ sewsource https://github.com/username/repository
 
 ```bash
 sewsource https://github.com/username/repository \
+    --all \
     --output-dir "./docs_combined" \
     --include-dirs "docs,wiki" \
     --exclude-dirs "tests" \
@@ -53,6 +54,7 @@ sewsource https://github.com/username/repository \
 
 | Option | Short | Description | Default |
 |--------|-------|-------------|---------|
+|`--all` | `-a` | Concatenate multiple sources into single final source | False |
 | `--output-dir` | `-o` | Output directory for combined files | `~/.sewsource` |
 | `--include-dirs` | `-i` | Directories to include | All directories |
 | `--exclude-dirs` | `-x` | Directories to exclude | None |
