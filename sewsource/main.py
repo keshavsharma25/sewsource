@@ -4,7 +4,7 @@ from git import Repo
 from git.exc import GitError, GitCommandError
 from pathlib import Path
 import re
-from typing import List
+from typing import List, Union
 import tempfile
 from rich.console import Console
 
@@ -85,7 +85,8 @@ def analyze_sources(
     exclude_dirs: tuple[str, ...] = (),
     blacklist: tuple[str, ...] = (),
     extensions: tuple[str, ...] = (),
-) -> dict[Path, List[Path]]:
+    is_all: bool = False,
+) -> Union[dict[Path, List[Path]], List[Path]]:
     """
     analyze directory structure using rglob because we're too fancy for os.walk
     returns a dictionary of folder paths and their source files
@@ -121,74 +122,139 @@ def analyze_sources(
             # add the file to its directory group
             file_groups[dir_path].append(file_path)
 
+    if is_all:
+        return [file for files in file_groups.values() for file in files]
+
     return file_groups
 
 
 def concatenate_sources(
-    file_groups: dict[Path, List[Path]], root_path: Path, output_dir: Path
+    file_groups: Union[dict[Path, List[Path]], List[Path]],
+    root_path: Path,
+    output_dir: Path,
+    is_all: bool,
 ):
     """
     Concatenates files and export them to an output_dir
     """
+
     Path(Path(output_dir) / root_path.name).mkdir(parents=True, exist_ok=True)
-    total_folders = len(file_groups)
-    total_files = sum(len(files) for files in file_groups.values())
 
-    click.secho(
-        f'\n🚀 Found {total_files} files and {total_folders} folders to merge.',
-        fg='blue',
-    )
+    if isinstance(file_groups, dict):
+        total_folders = len(file_groups)
+        total_files = sum(len(files) for files in file_groups.values())
 
-    i = 1
+        click.secho(
+            f'\n🚀 Found {total_files} files and {total_folders} folders to merge.',
+            fg='blue',
+        )
+    else:
+        total_files = len(file_groups)
 
-    with click.progressbar(
-        file_groups.items(),
-        length=len(file_groups),
-        label=click.style('📁 Processing folders', fg='green'),
-        fill_char=click.style('█', fg='green'),
-        empty_char='░',
-    ) as bar:
-        for dir_path, file_list in file_groups.items():
-            folder_name = Path(dir_path).name
-            output_content = []
+        click.secho(
+            f'\n🚀 Found {total_files} files and to merge into a `single source file`.',
+            fg='blue',
+        )
 
-            output_content.append(f"""
+    if is_all and isinstance(file_groups, list):
+        output_content = []
+        output_content.append(f"""
 {'#' * 50}
-# Folder: {dir_path.relative_to(root_path)}
-# Number of files merged: {len(file_list)}
+# Repository: {root_path.name}
+# Total files merged: {total_files}
 {'#' * 50}\n
 """)
 
-            for idx, file_path in enumerate(file_list, 1):
-                try:
-                    full_path = Path(root_path) / file_path
-                    with open(full_path, 'r', encoding='utf-8') as f:
-                        content = f.read()
+        # Ensure files are a list
+        files_to_process = (
+            file_groups
+            if isinstance(file_groups, list)
+            else list(file_groups.values())[0]
+        )
 
-                        output_content.append(f"""
+        for idx, file_path in enumerate(files_to_process, 1):
+            try:
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    content = f.read()
+
+                    output_content.append(f"""
 \n{'=' * 80}
 Source File {idx}: {file_path.relative_to(root_path)}
 {'=' * 80}\n
 {content}
 """)
 
-                except Exception as e:
-                    click.secho(
-                        f'\n❌ Failed to process {Path(file_path).relative_to(root_path)} - Error: {str(e)}',
-                        fg='red',
-                    )
+            except Exception as e:
+                click.secho(
+                    f'\n❌ Failed to process {file_path.relative_to(root_path)} - Error: {str(e)}',
+                    fg='red',
+                )
+                continue
+
+        # Write to a single file
+        output_file = Path(output_dir) / root_path.name / f'{root_path.name}.txt'
+        output_file.write_text('\n'.join(output_content), encoding='utf-8')
+    if not is_all and isinstance(file_groups, dict):
+        i = 1
+        with click.progressbar(
+            file_groups.items(),
+            length=len(file_groups),
+            label=click.style('📁 Processing folders', fg='green'),
+            fill_char=click.style('█', fg='green'),
+            empty_char='░',
+        ) as bar:
+            for dir_path, file_list in file_groups.items():
+                folder_name = Path(dir_path).name
+                output_content = []
+
+                output_content.append(f"""
+{'#' * 50}
+# Folder: {dir_path.relative_to(root_path)}
+# Number of files merged: {len(file_list)}
+{'#' * 50}\n
+""")
+
+                for idx, file_path in enumerate(file_list, 1):
+                    try:
+                        full_path = Path(root_path) / file_path
+                        with open(full_path, 'r', encoding='utf-8') as f:
+                            content = f.read()
+
+                            output_content.append(f"""
+\n{'=' * 80}
+Source File {idx}: {file_path.relative_to(root_path)}
+{'=' * 80}\n
+{content}
+""")
+
+                    except Exception as e:
+                        click.secho(
+                            f'\n❌ Failed to process {Path(file_path).relative_to(root_path)} - Error: {str(e)}',
+                            fg='red',
+                        )
+
                     continue
 
-            output_file = Path(output_dir) / root_path.name / f'{i}_{folder_name}.txt'
-            output_file.write_text('\n'.join(output_content), encoding='utf-8')
+                output_file = (
+                    Path(output_dir) / root_path.name / f'{i}_{folder_name}.txt'
+                )
+                output_file.write_text('\n'.join(output_content), encoding='utf-8')
 
-            i += 1
-            bar.update(1)
+                i += 1
+                bar.update(1)
 
 
 @click.command()
 @click.argument('repo-url', type=click.STRING)
 @click.version_option(version=version('sewsource'), prog_name='sewsource')
+@click.option(
+    '-a',
+    '--all',
+    is_flag=True,
+    show_default=True,
+    default=False,
+    help='Embed all the source into a single text',
+)
 @click.option(
     '-o',
     '--output-dir',
@@ -226,6 +292,7 @@ Source File {idx}: {file_path.relative_to(root_path)}
 )
 def main(
     repo_url: str,
+    all: bool,
     output_dir: Path,
     include_dirs: tuple[str, ...],
     exclude_dirs: tuple[str, ...],
@@ -240,8 +307,6 @@ def main(
     repo_path: Path
 
     with tempfile.TemporaryDirectory() as temp_dir:
-        click.secho(f'📁 Created temporary directory: {temp_dir}\n')
-
         try:
             with console.status(f'Cloning Repo: {repo_url}', spinner='circle'):
                 repo_path = clone_repository(repo_url, temp_dir)
@@ -254,10 +319,10 @@ def main(
             click.secho('\n⌛Analyzing...', fg='blue')
 
             file_groups = analyze_sources(
-                repo_path, include_dirs, exclude_dirs, blacklist, extensions
+                repo_path, include_dirs, exclude_dirs, blacklist, extensions, is_all=all
             )
 
-            concatenate_sources(file_groups, repo_path, output_dir)
+            concatenate_sources(file_groups, repo_path, output_dir, is_all=all)
         except Exception as e:
             click.echo(f'❌Error: {str(e)}')
 
