@@ -100,6 +100,7 @@ sewsource https://github.com/kubernetes/kubernetes \
 
 * [x] Add support for comma separated values as arguments for multiple folders/files
 * [x] Add `is_all` option to concatenate all sources into a single final source file
+* [ ] Add folder support (doesn't have to be a Github url)
 
 ## 🤝 Contributing
 
